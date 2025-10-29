@@ -1,0 +1,10 @@
+{
+  "name": "disaster_ner_model",
+  "version": "1.0",
+  "description": "Custom spaCy NER model trained on disaster tweets for location extraction",
+  "training_examples": 15786,
+  "iterations": 30,
+  "labels": [
+    "LOC"
+  ]
+}
