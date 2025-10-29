@@ -1,0 +1,54 @@
+# Lightweight Backend Dockerfile (Faster Build)
+# Uses pre-built wheels when possible
+FROM python:3.10-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install only essential runtime dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python packages using pre-built wheels
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir \
+    flask==3.0.0 \
+    flask-cors==4.0.0 \
+    sqlalchemy==2.0.23 \
+    python-dotenv==1.0.0 \
+    geopy==2.4.1 \
+    psycopg2-binary==2.9.9 \
+    gunicorn==21.2.0
+
+# Install spaCy (lightweight version)
+RUN pip install --no-cache-dir spacy==3.7.4 --only-binary :all: || \
+    pip install --no-cache-dir spacy
+
+# Download spaCy model
+RUN python -m spacy download en_core_web_sm
+
+# Copy application code
+COPY . .
+
+# Create directory for ML model
+RUN mkdir -p disaster_ner_model
+
+# Expose port
+EXPOSE 5000
+
+# Environment variables
+ENV FLASK_APP=app.py
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:5000/health || exit 1
+
+# Run Flask app
+CMD ["python", "app.py"]
