@@ -21,7 +21,7 @@ class Hub(Base):
     location_name = Column(String(255), nullable=False)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
-    inventory = Column(JSON, default={})  # {item_name: quantity}
+    inventory = Column(JSON, default=dict)  # {item_name: quantity}
     contact = Column(String(255))
     created_at = Column(DateTime, default=datetime.utcnow)
     
@@ -52,6 +52,11 @@ class Donation(Base):
     allocated_to_victim_id = Column(Integer, nullable=True)
     allocated_to_hub_id = Column(Integer, nullable=True)
     notes = Column(Text)
+    # Optional payment/bank/QR information (stored as JSON). Example: { type: 'bank', account_name:..., account_number:..., qr: 'data' }
+    payment_info = Column(JSON, default=dict)
+    # Tracking: current status and history for delivery (admin updates)
+    tracking_status = Column(String(50), default='pending')
+    tracking_history = Column(JSON, default=list)  # list of {status, note, timestamp, hub_id}
     created_at = Column(DateTime, default=datetime.utcnow)
     
     def to_dict(self):
@@ -66,6 +71,9 @@ class Donation(Base):
             'allocated_to_victim_id': self.allocated_to_victim_id,
             'allocated_to_hub_id': self.allocated_to_hub_id,
             'notes': self.notes,
+            'payment_info': self.payment_info or {},
+            'tracking_status': self.tracking_status,
+            'tracking_history': self.tracking_history or [],
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 

@@ -341,7 +341,10 @@ def manage_donations():
                 donor_phone=data.get('donor_phone', ''),
                 items=data.get('items', {}),
                 amount=float(data.get('amount', 0)),
-                notes=data.get('notes', '')
+                notes=data.get('notes', ''),
+                payment_info=data.get('payment_info', {}),
+                tracking_status=data.get('tracking_status', 'pending'),
+                tracking_history=data.get('tracking_history', [])
             )
             
             db.add(donation)
@@ -354,6 +357,75 @@ def manage_donations():
                 'donation': donation.to_dict()
             }), 201
             
+    except Exception as e:
+        db.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/admin/donations', methods=['GET'])
+def admin_list_donations():
+    """
+    Admin: list all donations (requires X-Admin-Key header)
+    """
+    admin_key = request.headers.get('X-Admin-Key')
+    if admin_key != ADMIN_KEY:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    db = get_db()
+    try:
+        donations = db.query(Donation).order_by(Donation.created_at.desc()).all()
+        return jsonify({'success': True, 'donations': [d.to_dict() for d in donations]}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.route('/api/admin/donations/<int:donation_id>', methods=['PUT'])
+def admin_update_donation(donation_id):
+    """
+    Admin: update donation status/tracking information
+    Payload may include: allocated_status, tracking_status, tracking_note, hub_id
+    """
+    admin_key = request.headers.get('X-Admin-Key')
+    if admin_key != ADMIN_KEY:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    data = request.get_json() or {}
+    db = get_db()
+    try:
+        donation = db.query(Donation).filter(Donation.id == donation_id).first()
+        if not donation:
+            return jsonify({'error': 'Donation not found'}), 404
+
+        # Update simple fields
+        if 'allocated_status' in data:
+            donation.allocated_status = data.get('allocated_status')
+        if 'tracking_status' in data:
+            donation.tracking_status = data.get('tracking_status')
+
+        # Append tracking history entry if provided
+        tracking_note = data.get('tracking_note')
+        if tracking_note:
+            entry = {
+                'status': donation.tracking_status,
+                'note': tracking_note,
+                'timestamp': datetime.utcnow().isoformat()
+            }
+            # include hub id when given
+            if 'hub_id' in data:
+                entry['hub_id'] = data.get('hub_id')
+
+            history = donation.tracking_history or []
+            history.append(entry)
+            donation.tracking_history = history
+
+        db.commit()
+        db.refresh(donation)
+
+        return jsonify({'success': True, 'donation': donation.to_dict()}), 200
     except Exception as e:
         db.rollback()
         return jsonify({'error': str(e)}), 500
